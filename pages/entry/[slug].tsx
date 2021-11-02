@@ -1,7 +1,7 @@
-import { GetStaticProps, InferGetStaticPropsType } from 'next'
+import { GetStaticProps, InferGetStaticPropsType, GetStaticPaths } from 'next'
 import Link from 'next/link'
 
-import { getCategoryList, getPlant, getPlantList } from '@api'
+import { getPlant, getPlantList, getCategoryList } from '@api'
 
 import { Layout } from '@components/Layout'
 import { Typography } from '@ui/Typography'
@@ -10,38 +10,17 @@ import { Grid } from '@ui/Grid'
 import { RichText } from '@components/RichText'
 import { AuthorCard } from '@components/AuthorCard'
 import { PlantEntryInline } from '@components/PlantCollection'
-// import { useRouter } from 'next/dist/client/router'
+import { Image } from '@components/Image'
 
-//2. Que paginas re renderizar
-type PathType = {
-  params: {
-    slug: string
-  }
-}
-
-export const getStaticPaths = async () => {
-  const entries = await getPlantList({ limit: 10 })
-
-  const paths: PathType[] = entries.map((plant) => ({
-    params: { slug: plant.slug },
-  }))
-
-  return {
-    paths,
-    // fallback: false, // 404
-    fallback: 'blocking', // Let the compoent handle it
-    //fallback: true,
-  }
-}
-
-// 1. como alimentar la pagina
-type PlantEntryProps = {
+type PlantEntryPageProps = {
   plant: Plant
   otherEntries: Plant[]
   categories: Category[]
 }
-export const getStaticProps: GetStaticProps<PlantEntryProps> = async ({
+
+export const getStaticProps: GetStaticProps<PlantEntryPageProps> = async ({
   params,
+  preview,
 }) => {
   const slug = params?.slug
 
@@ -52,8 +31,12 @@ export const getStaticProps: GetStaticProps<PlantEntryProps> = async ({
   }
 
   try {
-    const plant = await getPlant(slug)
-    const otherEntries = await getPlantList({ limit: 5 })
+    const plant = await getPlant(slug, preview)
+
+    // Sidebar – This could be a single request since we are using GraphQL :)
+    const otherEntries = await getPlantList({
+      limit: 5,
+    })
     const categories = await getCategoryList({ limit: 10 })
 
     return {
@@ -62,12 +45,37 @@ export const getStaticProps: GetStaticProps<PlantEntryProps> = async ({
         otherEntries,
         categories,
       },
-      revalidate: 5 * 60, //refresh?
+      revalidate: 5 * 60, // once every five minutes
     }
-  } catch (error) {
+  } catch (e) {
     return {
       notFound: true,
     }
+  }
+}
+
+type PathType = {
+  params: {
+    slug: string
+  }
+}
+
+export const getStaticPaths: GetStaticPaths = async () => {
+  // Match home query.
+  // @TODO how do we generate all of our pages if we don't know the number? 🤔
+  const plantEntriesToGenerate = await getPlantList({ limit: 10 })
+
+  const paths: PathType[] = plantEntriesToGenerate.map(({ slug }) => ({
+    params: {
+      slug,
+    },
+  }))
+
+  return {
+    paths,
+
+    // Block until the server gets its data. Like in Server side rendering
+    fallback: 'blocking',
   }
 }
 
@@ -76,20 +84,18 @@ export default function PlantEntryPage({
   otherEntries,
   categories,
 }: InferGetStaticPropsType<typeof getStaticProps>) {
-  //const router = useRouter()
-
-  // esto es para la estrategia de fallback = true
-  // if (router.isFallback) {
-  //   //Next.js esta cargando
-  //   return <Layout>Loading awesomeness...</Layout>
-  // }
-
   return (
     <Layout>
       <Grid container spacing={4}>
         <Grid item xs={12} md={8} lg={9} component="article">
           <figure>
-            <img width={952} src={plant.image.url} alt={plant.image.title} />
+            <Image
+              width={952}
+              aspectRatio="4:3"
+              layout="intrinsic"
+              src={plant.image.url}
+              alt={plant.image.title}
+            />
           </figure>
           <div className="px-12 pt-8">
             <Typography variant="h2">{plant.plantName}</Typography>
