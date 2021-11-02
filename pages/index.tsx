@@ -8,6 +8,8 @@ import { Authors } from '@components/Authors'
 
 type HomeProps = { plants: Plant[] }
 
+console.log(process.env.NEXT_PUBLIC_SPACE_ID)
+
 export const getStaticProps: GetStaticProps<HomeProps> = async () => {
   const plants = await getPlantList({ limit: 10 })
 
